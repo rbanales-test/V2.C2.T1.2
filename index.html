@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Waveform & Noise Generator - Topic 1.2</title>
+    <style>
+        /* Coursera Brand Identity */
+        :root {
+            --coursera-blue: #0056D2;
+            --coursera-blue-hover: #00419e;
+            --text-main: #1F1F1F;
+            --text-secondary: #636363;
+            --bg-page: #F5F7F8;
+            --bg-panel: #FFFFFF;
+            --border-color: #E2E2E2;
+            --success-green: #00885A;
+        }
+
+        body {
+            font-family: 'Source Sans Pro', Arial, sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            line-height: 1.5;
+        }
+
+        .screen {
+            background-color: var(--bg-panel);
+            padding: 40px;
+            border-radius: 8px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border: 1px solid var(--border-color);
+            box-sizing: border-box;
+        }
+
+        #app-screen {
+            display: none;
+        }
+
+        h1, h2, h3 {
+            margin-top: 0;
+            color: var(--text-main);
+        }
+
+        p {
+            color: var(--text-secondary);
+        }
+
+        .tutorial-content {
+            background-color: #EBF3FF;
+            padding: 20px;
+            border-left: 4px solid var(--coursera-blue);
+            margin-bottom: 30px;
+        }
+
+        canvas {
+            background-color: var(--text-main);
+            border-radius: 4px;
+            margin: 20px 0;
+            width: 100%;
+            height: 200px;
+        }
+
+        button {
+            background-color: var(--coursera-blue);
+            color: #FFFFFF;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--coursera-blue-hover);
+        }
+
+        button:focus, select:focus, input[type="range"]:focus {
+            outline: 3px solid #82B1FF;
+            outline-offset: 2px;
+        }
+
+        .architecture-flow {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .module-block {
+            flex: 1;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: #FAFAFA;
+            transition: opacity 0.3s;
+        }
+
+        .module-block.disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .module-title {
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: var(--coursera-blue);
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 5px;
+        }
+
+        select, input[type="range"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .mission-box {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #F9F9F9;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        .mission-title {
+            font-weight: bold;
+            color: var(--coursera-blue);
+            margin-bottom: 10px;
+        }
+
+        .success-text {
+            color: var(--success-green);
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Tutorial / Start Screen -->
+    <div id="tutorial-screen" class="screen" role="dialog" aria-labelledby="tutorial-title" aria-describedby="tutorial-desc">
+        <h1 id="tutorial-title">Signal Flow & Waveform Simulator</h1>
+        
+        <div class="tutorial-content" id="tutorial-desc">
+            <p><strong>Objective:</strong> Synthesize raw audio signals by selecting periodic waveforms and noise types, analyzing real-time time-domain shapes. Understand the basic synthesizer signal path.</p>
+            <p><strong>Instructions:</strong></p>
+            <ol>
+                <li>Click <strong>Start Simulator</strong> and turn on the audio.</li>
+                <li>Complete the <strong>5 sequential missions</strong> to unlock all modules.</li>
+                <li>Observe the oscilloscope to see the exact geometric shape of your selected waveform or noise.</li>
+                <li>Remember the universal path: <em>Oscillator &rarr; Filter (Next Week) &rarr; Amplifier</em>.</li>
+            </ol>
+        </div>
+        <button id="btn-start" tabindex="0">Start Simulator</button>
+    </div>
+
+    <!-- Main Simulator Screen -->
+    <div id="app-screen" class="screen" role="main" aria-hidden="true">
+        <h2>Basic Synthesis Architecture</h2>
+        <p>Listen and observe the raw sound source before it gets sculpted.</p>
+        
+        <button id="btn-play" aria-pressed="false">Play Audio</button>
+
+        <canvas id="oscilloscope" width="800" height="200" aria-label="Real-time waveform oscilloscope" role="img"></canvas>
+        
+        <div class="architecture-flow">
+            <!-- Source Module -->
+            <div id="mod-oscillator" class="module-block disabled">
+                <div class="module-title">1. Oscillator / Noise (Source)</div>
+                <label for="wave-select">Raw Sound Generator:</label>
+                <select id="wave-select" tabindex="0">
+                    <option value="none" selected disabled>-- Select a source --</option>
+                    <optgroup label="Periodic Waveforms">
+                        <option value="sine">Sine (Pure, smooth)</option>
+                        <option value="sawtooth">Sawtooth (Bright, buzzy, rich)</option>
+                        <option value="square">Square (Hollow, reedy)</option>
+                        <option value="triangle">Triangle (Soft, rounded)</option>
+                    </optgroup>
+                    <optgroup label="Noise Generators">
+                        <option value="white">White Noise (Hiss, all frequencies)</option>
+                    </optgroup>
+                </select>
+                <small style="color:var(--text-secondary);">Creates the raw repeating signal or random noise.</small>
+            </div>
+
+            <!-- Amplifier Module -->
+            <div id="mod-amplifier" class="module-block disabled">
+                <div class="module-title">2. Amplifier (Volume)</div>
+                <label for="amp-level">Master Level: <span id="val-amp">80</span>%</label>
+                <input type="range" id="amp-level" min="0" max="100" value="80" tabindex="0">
+                <small style="color:var(--text-secondary);">Sets the final loudness of the signal.</small>
+            </div>
+        </div>
+        
+        <div class="mission-box" aria-live="polite">
+            <div id="mission-title" class="mission-title">Mission 1/5</div>
+            <div id="mission-status">Turn on the audio and select the <strong>Sine</strong> wave to see its smooth, pure shape.</div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const tutorialScreen = document.getElementById('tutorial-screen');
+        const appScreen = document.getElementById('app-screen');
+        const btnStart = document.getElementById('btn-start');
+        const btnPlay = document.getElementById('btn-play');
+        
+        const waveSelect = document.getElementById('wave-select');
+        const ampLevel = document.getElementById('amp-level');
+        const valAmp = document.getElementById('val-amp');
+        
+        const modOscillator = document.getElementById('mod-oscillator');
+        const modAmplifier = document.getElementById('mod-amplifier');
+
+        const canvas = document.getElementById('oscilloscope');
+        const ctx = canvas.getContext('2d');
+        const missionTitle = document.getElementById('mission-title');
+        const missionStatus = document.getElementById('mission-status');
+
+        // Audio Variables
+        let audioCtx, masterGain, activeSource, analyser;
+        let dataArray, bufferLength;
+        let isPlaying = false;
+        let currentMission = 1;
+        let drawVisual;
+        
+        // Transitions
+        btnStart.addEventListener('click', () => {
+            tutorialScreen.style.display = 'none';
+            tutorialScreen.setAttribute('aria-hidden', 'true');
+            appScreen.style.display = 'block';
+            appScreen.removeAttribute('aria-hidden');
+            btnPlay.focus();
+        });
+
+        // Web Audio API Setup
+        function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            masterGain = audioCtx.createGain();
+            masterGain.gain.value = 0.8;
+            
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 2048;
+            bufferLength = analyser.frequencyBinCount;
+            dataArray = new Uint8Array(bufferLength);
+
+            masterGain.connect(analyser);
+            analyser.connect(audioCtx.destination);
+        }
+
+        function createNoiseBuffer() {
+            const bufferSize = audioCtx.sampleRate * 2; // 2 seconds of noise
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const output = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                output[i] = Math.random() * 2 - 1; // White noise
+            }
+            return buffer;
+        }
+
+        function playSource(type) {
+            if (activeSource) {
+                activeSource.stop();
+                activeSource.disconnect();
+            }
+
+            if (type === 'white') {
+                activeSource = audioCtx.createBufferSource();
+                activeSource.buffer = createNoiseBuffer();
+                activeSource.loop = true;
+            } else {
+                activeSource = audioCtx.createOscillator();
+                activeSource.type = type;
+                activeSource.frequency.value = 110; // A2 for clear oscilloscope viewing
+            }
+
+            activeSource.connect(masterGain);
+            activeSource.start();
+        }
+
+        function toggleAudio() {
+            if (!audioCtx) initAudio();
+            
+            if (isPlaying) {
+                if (activeSource) {
+                    activeSource.stop();
+                    activeSource.disconnect();
+                }
+                btnPlay.textContent = "Play Audio";
+                btnPlay.setAttribute('aria-pressed', 'false');
+                cancelAnimationFrame(drawVisual);
+            } else {
+                if(waveSelect.value !== 'none') {
+                    playSource(waveSelect.value);
+                }
+                btnPlay.textContent = "Pause Audio";
+                btnPlay.setAttribute('aria-pressed', 'true');
+                drawOscilloscope();
+                
+                // Unlock oscillator control
+                if(currentMission === 1) modOscillator.classList.remove('disabled');
+            }
+            isPlaying = !isPlaying;
+            checkMissions();
+        }
+
+        function drawOscilloscope() {
+            drawVisual = requestAnimationFrame(drawOscilloscope);
+            analyser.getByteTimeDomainData(dataArray);
+
+            ctx.fillStyle = 'rgb(31, 31, 31)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#82B1FF';
+            ctx.beginPath();
+
+            const sliceWidth = canvas.width * 1.0 / bufferLength;
+            let x = 0;
+
+            for (let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 128.0;
+                const y = v * canvas.height / 2;
+
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+
+                x += sliceWidth;
+            }
+            ctx.lineTo(canvas.width, canvas.height / 2);
+            ctx.stroke();
+        }
+
+        function checkMissions() {
+            if (!isPlaying) return;
+            const wave = waveSelect.value;
+            const amp = parseInt(ampLevel.value);
+
+            if (currentMission === 1 && wave === 'sine') {
+                currentMission = 2;
+                missionTitle.textContent = "Mission 2/5";
+                missionStatus.innerHTML = "Good! Now select the <strong>Sawtooth</strong> wave to hear a rich, bright sound full of harmonics.";
+            } 
+            else if (currentMission === 2 && wave === 'sawtooth') {
+                currentMission = 3;
+                missionTitle.textContent = "Mission 3/5";
+                missionStatus.innerHTML = "Notice the sharp drop on the screen? Now select the <strong>Square</strong> wave to hear a hollow, clarinet-like tone.";
+            }
+            else if (currentMission === 3 && wave === 'square') {
+                currentMission = 4;
+                missionTitle.textContent = "Mission 4/5";
+                missionStatus.innerHTML = "Now, let's explore non-periodic sounds. Select <strong>White Noise</strong> to see a jagged, random shape.";
+            }
+            else if (currentMission === 4 && wave === 'white') {
+                currentMission = 5;
+                modAmplifier.classList.remove('disabled');
+                missionTitle.textContent = "Mission 5/5";
+                missionStatus.innerHTML = "Great! Finally, lower the <strong>Amplifier</strong> level below 40% to see how it scales the signal down.";
+            }
+            else if (currentMission === 5 && amp < 40) {
+                currentMission = 6;
+                missionTitle.textContent = "Mission 5/5: Completed!";
+                missionTitle.classList.add('success-text');
+                missionStatus.innerHTML = "<strong>Congratulations!</strong> You have completed the signal flow tutorial. <br><br><em>Note: Do not close this window without remembering which waveform best suits the target instrument you chose for your Week 1 Assignment (Piece 1).</em>";
+            }
+        }
+
+        // Event Listeners
+        btnPlay.addEventListener('click', toggleAudio);
+        
+        waveSelect.addEventListener('change', (e) => {
+            if(isPlaying) playSource(e.target.value);
+            checkMissions();
+        });
+
+        ampLevel.addEventListener('input', (e) => {
+            valAmp.textContent = e.target.value;
+            if(masterGain) {
+                masterGain.gain.setTargetAtTime(e.target.value / 100, audioCtx.currentTime, 0.05);
+            }
+            checkMissions();
+        });
+        
+        // Initial static draw
+        ctx.fillStyle = 'rgb(31, 31, 31)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.beginPath();
+        ctx.strokeStyle = '#636363';
+        ctx.moveTo(0, canvas.height/2);
+        ctx.lineTo(canvas.width, canvas.height/2);
+        ctx.stroke();
+
+    </script>
+</body>
+</html>
