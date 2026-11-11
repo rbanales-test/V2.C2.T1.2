@@ -14,6 +14,11 @@
             --bg-panel: #FFFFFF;
             --border-color: #E2E2E2;
             --success-green: #00885A;
+            --danger-red: #D32F2F;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
         }
 
         body {
@@ -36,7 +41,6 @@
             width: 100%;
             box-shadow: 0 2px 4px rgba(0,0,0,0.08);
             border: 1px solid var(--border-color);
-            box-sizing: border-box;
         }
 
         #app-screen {
@@ -52,11 +56,36 @@
             color: var(--text-secondary);
         }
 
+        /* Volume Warning Box */
+        .volume-warning {
+            background-color: #FFEBEE;
+            border-left: 4px solid var(--danger-red);
+            padding: 14px 18px;
+            border-radius: 0 4px 4px 0;
+            margin-bottom: 20px;
+        }
+
+        .volume-warning h3 {
+            color: var(--danger-red);
+            font-size: 15px;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .volume-warning p {
+            color: #B71C1C;
+            font-size: 13.5px;
+            margin: 0;
+            line-height: 1.4;
+        }
+
         .tutorial-content {
             background-color: #EBF3FF;
             padding: 20px;
             border-left: 4px solid var(--coursera-blue);
-            margin-bottom: 30px;
+            margin-bottom: 25px;
         }
 
         canvas {
@@ -65,6 +94,7 @@
             margin: 20px 0;
             width: 100%;
             height: 200px;
+            display: block;
         }
 
         button {
@@ -91,18 +121,23 @@
         .architecture-flow {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
+            align-items: stretch;
             gap: 20px;
             margin: 20px 0;
+            width: 100%;
         }
 
         .module-block {
             flex: 1;
-            padding: 15px;
+            min-width: 0; /* Previene desbordes en flex containers */
+            padding: 18px;
             border: 1px solid var(--border-color);
             border-radius: 4px;
             background-color: #FAFAFA;
             transition: opacity 0.3s;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
         }
 
         .module-block.disabled {
@@ -118,11 +153,29 @@
             padding-bottom: 5px;
         }
 
-        select, input[type="range"] {
+        label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        select {
             width: 100%;
             padding: 10px;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             font-size: 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: #FFFFFF;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin: 12px 0 8px 0;
+            cursor: pointer;
+            padding: 0;
         }
 
         .mission-box {
@@ -150,15 +203,23 @@
     <!-- Tutorial / Start Screen -->
     <div id="tutorial-screen" class="screen" role="dialog" aria-labelledby="tutorial-title" aria-describedby="tutorial-desc">
         <h1 id="tutorial-title">Signal Flow & Waveform Simulator</h1>
+
+        <!-- Universal Volume Warning -->
+        <div class="volume-warning" role="alert">
+            <h3>⚠️ Volume Warning / Cuidado con el Volumen</h3>
+            <p>This simulator synthesizes raw unmodulated waveforms and broadband white noise. Please set your headphone or system volume to a moderate level before starting.</p>
+        </div>
         
         <div class="tutorial-content" id="tutorial-desc">
             <p><strong>Objective:</strong> Synthesize raw audio signals by selecting periodic waveforms and noise types, analyzing real-time time-domain shapes. Understand the basic synthesizer signal path.</p>
-            <p><strong>Instructions:</strong></p>
+            <p><strong>Instructions & Accessibility:</strong></p>
             <ol>
-                <li>Click <strong>Start Simulator</strong> and turn on the audio.</li>
+                <li>Click <strong>Start Simulator</strong> to initialize the engine (integrated safety limiter active).</li>
+                <li>Press <kbd>Spacebar</kbd> or click <strong>Play Audio</strong> at any time to toggle the sound.</li>
+                <li>Use <kbd>Tab</kbd> to move between controls and arrow keys (<kbd>&larr;</kbd> <kbd>&rarr;</kbd> / <kbd>&uarr;</kbd> <kbd>&darr;</kbd>) to adjust.</li>
                 <li>Complete the <strong>5 sequential missions</strong> to unlock all modules.</li>
                 <li>Observe the oscilloscope to see the exact geometric shape of your selected waveform or noise.</li>
-                <li>Remember the universal path: <em>Oscillator &rarr; Filter (Next Week) &rarr; Amplifier</em>.</li>
+                <li>Remember the universal path: <em>Oscillator &rarr; Filter &rarr; Amplifier</em>.</li>
             </ol>
         </div>
         <button id="btn-start" tabindex="0">Start Simulator</button>
@@ -169,7 +230,7 @@
         <h2>Basic Synthesis Architecture</h2>
         <p>Listen and observe the raw sound source before it gets sculpted.</p>
         
-        <button id="btn-play" aria-pressed="false">Play Audio</button>
+        <button id="btn-play" aria-pressed="false" tabindex="0">Play Audio (Spacebar)</button>
 
         <canvas id="oscilloscope" width="800" height="200" aria-label="Real-time waveform oscilloscope" role="img"></canvas>
         
@@ -228,7 +289,7 @@
         const missionStatus = document.getElementById('mission-status');
 
         // Audio Variables
-        let audioCtx, masterGain, activeSource, analyser;
+        let audioCtx, masterGain, safetyLimiter, activeSource, analyser;
         let dataArray, bufferLength;
         let isPlaying = false;
         let currentMission = 1;
@@ -245,33 +306,49 @@
 
         // Web Audio API Setup
         function initAudio() {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            masterGain = audioCtx.createGain();
-            masterGain.gain.value = 0.8;
-            
-            analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 2048;
-            bufferLength = analyser.frequencyBinCount;
-            dataArray = new Uint8Array(bufferLength);
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Safety Limiter
+                safetyLimiter = audioCtx.createDynamicsCompressor();
+                safetyLimiter.threshold.value = -8;
+                safetyLimiter.knee.value = 0;
+                safetyLimiter.ratio.value = 20;
+                safetyLimiter.attack.value = 0.001;
+                safetyLimiter.release.value = 0.1;
 
-            masterGain.connect(analyser);
-            analyser.connect(audioCtx.destination);
+                masterGain = audioCtx.createGain();
+                masterGain.gain.value = 0;
+                
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 2048;
+                bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+
+                // Routing: Source -> MasterGain -> SafetyLimiter -> Analyser -> Destination
+                masterGain.connect(safetyLimiter);
+                safetyLimiter.connect(analyser);
+                analyser.connect(audioCtx.destination);
+            }
         }
 
         function createNoiseBuffer() {
-            const bufferSize = audioCtx.sampleRate * 2; // 2 seconds of noise
+            const bufferSize = audioCtx.sampleRate * 2;
             const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
             const output = buffer.getChannelData(0);
             for (let i = 0; i < bufferSize; i++) {
-                output[i] = Math.random() * 2 - 1; // White noise
+                output[i] = (Math.random() * 2 - 1) * 0.7; // Scaled to prevent clipping
             }
             return buffer;
         }
 
         function playSource(type) {
             if (activeSource) {
-                activeSource.stop();
-                activeSource.disconnect();
+                try {
+                    activeSource.stop();
+                    activeSource.disconnect();
+                } catch(e) {}
+                activeSource = null;
             }
 
             if (type === 'white') {
@@ -281,7 +358,7 @@
             } else {
                 activeSource = audioCtx.createOscillator();
                 activeSource.type = type;
-                activeSource.frequency.value = 110; // A2 for clear oscilloscope viewing
+                activeSource.frequency.value = 110; // A2 for stable oscilloscope tracing
             }
 
             activeSource.connect(masterGain);
@@ -289,26 +366,49 @@
         }
 
         function toggleAudio() {
-            if (!audioCtx) initAudio();
+            initAudio();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
             
+            const now = audioCtx.currentTime;
+            const targetAmp = (parseInt(ampLevel.value) / 100) * 0.8;
+
             if (isPlaying) {
-                if (activeSource) {
-                    activeSource.stop();
-                    activeSource.disconnect();
-                }
-                btnPlay.textContent = "Play Audio";
+                masterGain.gain.cancelScheduledValues(now);
+                masterGain.gain.setValueAtTime(masterGain.gain.value, now);
+                masterGain.gain.linearRampToValueAtTime(0, now + 0.05);
+
+                setTimeout(() => {
+                    if (!isPlaying && activeSource) {
+                        try {
+                            activeSource.stop();
+                            activeSource.disconnect();
+                        } catch(e) {}
+                        activeSource = null;
+                    }
+                }, 60);
+
+                btnPlay.textContent = "Play Audio (Spacebar)";
                 btnPlay.setAttribute('aria-pressed', 'false');
                 cancelAnimationFrame(drawVisual);
+                drawZeroLine();
             } else {
-                if(waveSelect.value !== 'none') {
+                if (waveSelect.value !== 'none') {
                     playSource(waveSelect.value);
                 }
-                btnPlay.textContent = "Pause Audio";
+
+                masterGain.gain.cancelScheduledValues(now);
+                masterGain.gain.setValueAtTime(0, now);
+                masterGain.gain.linearRampToValueAtTime(targetAmp, now + 0.05);
+
+                btnPlay.textContent = "Pause Audio (Spacebar)";
                 btnPlay.setAttribute('aria-pressed', 'true');
                 drawOscilloscope();
                 
-                // Unlock oscillator control
-                if(currentMission === 1) modOscillator.classList.remove('disabled');
+                if (currentMission === 1) {
+                    modOscillator.classList.remove('disabled');
+                }
             }
             isPlaying = !isPlaying;
             checkMissions();
@@ -325,18 +425,29 @@
             ctx.strokeStyle = '#82B1FF';
             ctx.beginPath();
 
-            const sliceWidth = canvas.width * 1.0 / bufferLength;
+            const sliceWidth = (canvas.width * 1.0) / bufferLength;
             let x = 0;
 
             for (let i = 0; i < bufferLength; i++) {
                 const v = dataArray[i] / 128.0;
-                const y = v * canvas.height / 2;
+                const y = (v * canvas.height) / 2;
 
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
 
                 x += sliceWidth;
             }
+            ctx.lineTo(canvas.width, canvas.height / 2);
+            ctx.stroke();
+        }
+
+        function drawZeroLine() {
+            ctx.fillStyle = 'rgb(31, 31, 31)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.beginPath();
+            ctx.strokeStyle = '#636363';
+            ctx.lineWidth = 1;
+            ctx.moveTo(0, canvas.height / 2);
             ctx.lineTo(canvas.width, canvas.height / 2);
             ctx.stroke();
         }
@@ -375,31 +486,44 @@
             }
         }
 
+        // Global Keyboard Handler (WCAG compliance)
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.key === ' ') {
+                e.preventDefault();
+                if (appScreen.style.display === 'block' && !e.repeat) {
+                    toggleAudio();
+                }
+            } else if (e.key === 'Enter') {
+                if (appScreen.style.display === 'block' && e.target !== btnStart && !e.repeat) {
+                    if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'SELECT') {
+                        e.preventDefault();
+                        toggleAudio();
+                    }
+                }
+            }
+        });
+
         // Event Listeners
         btnPlay.addEventListener('click', toggleAudio);
         
         waveSelect.addEventListener('change', (e) => {
-            if(isPlaying) playSource(e.target.value);
+            if (isPlaying) {
+                playSource(e.target.value);
+            }
             checkMissions();
         });
 
         ampLevel.addEventListener('input', (e) => {
             valAmp.textContent = e.target.value;
-            if(masterGain) {
-                masterGain.gain.setTargetAtTime(e.target.value / 100, audioCtx.currentTime, 0.05);
+            if (masterGain && audioCtx) {
+                const targetAmp = (parseInt(e.target.value) / 100) * 0.8;
+                masterGain.gain.setTargetAtTime(targetAmp, audioCtx.currentTime, 0.04);
             }
             checkMissions();
         });
         
         // Initial static draw
-        ctx.fillStyle = 'rgb(31, 31, 31)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.beginPath();
-        ctx.strokeStyle = '#636363';
-        ctx.moveTo(0, canvas.height/2);
-        ctx.lineTo(canvas.width, canvas.height/2);
-        ctx.stroke();
-
+        drawZeroLine();
     </script>
 </body>
 </html>
